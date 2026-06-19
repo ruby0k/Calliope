@@ -1,0 +1,6 @@
+[project]
+name = "calliope"
+version = "0.1.0"
+description = "A language model research project exploring how far a dumb student can push language model capabilities under severe compute constraints to avoid paying for subscriptions."
+requires-python = ">=3.12"
+dependencies = []
