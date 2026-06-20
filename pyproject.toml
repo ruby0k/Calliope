@@ -3,4 +3,18 @@ name = "calliope"
 version = "0.1.0"
 description = "A language model research project exploring how far a dumb student can push language model capabilities under severe compute constraints to avoid paying for subscriptions."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "numpy>=2.4.6",
+    "torch==2.12.1+cu130",
+]
+
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+torchaudio = { index = "pytorch-cu130" }
