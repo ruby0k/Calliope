@@ -34,4 +34,5 @@ class TrainConfig:
     beta1: float = 0.9
     beta2: float = 0.95
     grad_clip: float = 1.0
+    loss_ema_beta: float = 0.98
     compile: bool = False

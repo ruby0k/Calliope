@@ -127,6 +127,18 @@ Outputs:
 uv run python scripts/sample.py --prompt "Once upon a time"
 ```
 
+Generate 12 samples from the fixed prompt set:
+
+```powershell
+uv run python scripts/sample_fixed_prompts.py --samples-per-prompt 4
+```
+
+Check prepared train/val shard quality:
+
+```powershell
+uv run python scripts/check_split_quality.py
+```
+
 ## Count Parameters
 
 ```powershell

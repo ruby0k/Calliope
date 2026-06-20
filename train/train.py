@@ -110,6 +110,7 @@ def main() -> None:
         return get_batch(data, model_cfg.block_size, train_cfg.batch_size, device)
 
     t0 = time.time()
+    loss_ema = None
     while iter_num < train_cfg.max_iters:
         lr = get_lr(iter_num, train_cfg)
         for group in optimizer.param_groups:
@@ -129,11 +130,12 @@ def main() -> None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), train_cfg.grad_clip)
         optimizer.step()
         iter_num += 1
+        loss_ema = loss_accum if loss_ema is None else train_cfg.loss_ema_beta * loss_ema + (1 - train_cfg.loss_ema_beta) * loss_accum
 
         if iter_num % 10 == 0:
             dt = time.time() - t0
             tokens = train_cfg.batch_size * train_cfg.grad_accum_steps * model_cfg.block_size * 10
-            print(f"iter {iter_num}: loss {loss_accum:.4f}, lr {lr:.2e}, {tokens / dt:.0f} tok/s")
+            print(f"iter {iter_num}: loss {loss_accum:.4f}, ema {loss_ema:.4f}, lr {lr:.2e}, {tokens / dt:.0f} tok/s")
             t0 = time.time()
 
         if iter_num % train_cfg.eval_interval == 0 or iter_num == train_cfg.max_iters:
@@ -143,6 +145,7 @@ def main() -> None:
                 "iter": iter_num,
                 "train_loss": losses["train"],
                 "val_loss": losses["val"],
+                "loss_ema": loss_ema,
                 "lr": lr,
                 "vram_gb": round(vram_gb, 3),
             }
