@@ -49,6 +49,7 @@ def main() -> None:
     parser.add_argument("--eval-iters", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--grad-accum-steps", type=int, default=None)
+    parser.add_argument("--run-name", default="")
     args = parser.parse_args()
 
     model_cfg, train_cfg = load_config(args.config)
@@ -60,6 +61,8 @@ def main() -> None:
         train_cfg.batch_size = args.batch_size
     if args.grad_accum_steps is not None:
         train_cfg.grad_accum_steps = args.grad_accum_steps
+    if args.run_name:
+        train_cfg.run_name = args.run_name
 
     seed_everything(train_cfg.seed)
     device = pick_device()
