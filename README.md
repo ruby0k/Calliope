@@ -62,3 +62,79 @@ Calliope is not intended to become the largest model.
 The goal is to become:
 
 **the somewhat compute-efficient model that can reasonably be developed by an independent researcher on consumer hardware.**
+
+---
+
+## Current Config
+
+```python
+vocab_size = 50257
+block_size = 256
+n_layer = 4
+n_head = 4
+n_embd = 256
+dropout = 0.0
+bias = False
+```
+
+## Setup
+
+```powershell
+uv sync
+```
+
+## Prepare TinyStories
+
+Default prep uses a small subset so the first run is quick:
+
+```powershell
+uv run python scripts/prepare_tinystories.py
+```
+
+Use the full dataset by passing negative limits:
+
+```powershell
+uv run python scripts/prepare_tinystories.py --max-train-docs -1 --max-val-docs -1
+```
+
+This writes:
+
+- `data/tinystories_gpt2/train.bin`
+- `data/tinystories_gpt2/val.bin`
+- `data/tinystories_gpt2/tokenizer/`
+- `data/tinystories_gpt2/meta.json`
+
+## Train
+
+```powershell
+uv run python -m train.train
+```
+
+Useful smoke run:
+
+```powershell
+uv run python -m train.train --max-iters 20 --eval-iters 5 --batch-size 2 --grad-accum-steps 1
+```
+
+Outputs:
+
+- checkpoints in `checkpoints/calliope_10m/`
+- run config and metrics in `experiments/<run_name>/`
+
+## Sample
+
+```powershell
+uv run python scripts/sample.py --prompt "Once upon a time"
+```
+
+## Count Parameters
+
+```powershell
+uv run python scripts/count_params.py
+```
+
+## Check Model Wiring
+
+```powershell
+uv run python scripts/smoke_model.py
+```
