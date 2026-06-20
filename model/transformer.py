@@ -20,10 +20,10 @@ class RMSNorm(nn.Module):
         return self.weight * x
 
 
-def apply_rope(x: torch.Tensor) -> torch.Tensor:
+def apply_rope(x: torch.Tensor, theta: float) -> torch.Tensor:
     _, _, t, d = x.shape
     half = d // 2
-    freqs = 1.0 / (10000 ** (torch.arange(0, half, device=x.device).float() / half))
+    freqs = 1.0 / (theta ** (torch.arange(0, half, device=x.device).float() / half))
     angles = torch.outer(torch.arange(t, device=x.device).float(), freqs).to(x.dtype)
     cos = angles.cos()[None, None, :, :]
     sin = angles.sin()[None, None, :, :]
@@ -35,19 +35,28 @@ class CausalSelfAttention(nn.Module):
     def __init__(self, config: ModelConfig):
         super().__init__()
         assert config.n_embd % config.n_head == 0
+        n_kv_head = config.n_kv_head or config.n_head
+        assert config.n_head % n_kv_head == 0
         self.n_head = config.n_head
+        self.n_kv_head = n_kv_head
+        self.head_dim = config.n_embd // config.n_head
+        self.rope_theta = config.rope_theta
         self.dropout = config.dropout
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        self.c_attn = nn.Linear(config.n_embd, config.n_embd + 2 * n_kv_head * self.head_dim, bias=config.bias)
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         self.resid_dropout = nn.Dropout(config.dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         b, t, c = x.shape
-        q, k, v = self.c_attn(x).split(c, dim=2)
-        q = q.view(b, t, self.n_head, c // self.n_head).transpose(1, 2)
-        k = k.view(b, t, self.n_head, c // self.n_head).transpose(1, 2)
-        v = v.view(b, t, self.n_head, c // self.n_head).transpose(1, 2)
-        q, k = apply_rope(q), apply_rope(k)
+        q, k, v = self.c_attn(x).split((c, self.n_kv_head * self.head_dim, self.n_kv_head * self.head_dim), dim=2)
+        q = q.view(b, t, self.n_head, self.head_dim).transpose(1, 2)
+        k = k.view(b, t, self.n_kv_head, self.head_dim).transpose(1, 2)
+        v = v.view(b, t, self.n_kv_head, self.head_dim).transpose(1, 2)
+        q, k = apply_rope(q, self.rope_theta), apply_rope(k, self.rope_theta)
+        if self.n_kv_head != self.n_head:
+            repeat = self.n_head // self.n_kv_head
+            k = k.repeat_interleave(repeat, dim=1)
+            v = v.repeat_interleave(repeat, dim=1)
         y = F.scaled_dot_product_attention(
             q,
             k,

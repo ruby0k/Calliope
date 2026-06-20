@@ -7,8 +7,10 @@ class ModelConfig:
     block_size: int = 256
     n_layer: int = 4
     n_head: int = 4
+    n_kv_head: int | None = None
     n_embd: int = 256
     dropout: float = 0.0
+    rope_theta: float = 10000.0
     bias: bool = False
 
 

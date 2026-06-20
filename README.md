@@ -67,6 +67,8 @@ The goal is to become:
 
 ## Current Config
 
+Calliope-10M:
+
 ```python
 vocab_size = 50257
 block_size = 256
@@ -75,6 +77,17 @@ n_head = 4
 n_embd = 256
 dropout = 0.0
 bias = False
+```
+
+Calliope-30M:
+
+```python
+block_size = 256
+n_layer = 6
+n_head = 6
+n_embd = 384
+batch_size = 4
+grad_accum_steps = 16
 ```
 
 ## Setup
@@ -110,6 +123,27 @@ This writes:
 uv run python -m train.train
 ```
 
+Train Calliope-30M:
+
+```powershell
+uv run python -m train.train --config configs.calliope_30m --run-name Calliope-30M-run001
+```
+
+Experiment configs:
+
+```powershell
+uv run python -m train.train --config configs.calliope_30m_dropout01 --run-name Calliope-30M-dropout01-run001
+uv run python -m train.train --config configs.calliope_30m_ctx512 --run-name Calliope-30M-ctx512-run001
+uv run python -m train.train --config configs.calliope_30m_rope_theta50000 --run-name Calliope-30M-rope50000-run001
+```
+
+Smaller tokenizer experiment:
+
+```powershell
+uv run python scripts/prepare_tinystories_bpe.py --out-dir data/tinystories_bpe8192 --vocab-size 8192 --max-tokenizer-docs -1 --max-train-docs -1 --max-val-docs -1
+uv run python -m train.train --config configs.calliope_30m_tok8192 --run-name Calliope-30M-tok8192-run001
+```
+
 Useful smoke run:
 
 ```powershell
@@ -143,6 +177,10 @@ uv run python scripts/check_split_quality.py
 
 ```powershell
 uv run python scripts/count_params.py
+```
+
+```powershell
+uv run python scripts/count_params.py --config configs.calliope_30m
 ```
 
 ## Check Model Wiring
