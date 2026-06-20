@@ -1,0 +1,16 @@
+{
+  "tokenizer": "gpt2",
+  "dataset": "roneneldan/TinyStories",
+  "train": {
+    "split": "train",
+    "docs": 2119719,
+    "tokens": 473992236,
+    "path": "data\\tinystories_gpt2\\train.bin"
+  },
+  "val": {
+    "split": "validation",
+    "docs": 21990,
+    "tokens": 4765918,
+    "path": "data\\tinystories_gpt2\\val.bin"
+  }
+}
