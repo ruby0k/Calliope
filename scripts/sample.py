@@ -16,6 +16,11 @@ def main() -> None:
     parser.add_argument("--checkpoint", default="checkpoints/calliope_10m/best.pt")
     parser.add_argument("--prompt", default="Once upon a time")
     parser.add_argument("--max-new-tokens", type=int, default=120)
+    parser.add_argument("--temperature", type=float, default=0.8)
+    parser.add_argument("--top-k", type=int, default=50)
+    parser.add_argument("--top-p", type=float, default=0.92)
+    parser.add_argument("--repetition-penalty", type=float, default=1.15)
+    parser.add_argument("--no-repeat-ngram-size", type=int, default=3)
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -29,7 +34,15 @@ def main() -> None:
     tokenizer_dir = Path(ckpt["train_config"]["data_dir"]) / "tokenizer"
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir if tokenizer_dir.exists() else "gpt2")
     ids = tokenizer.encode(args.prompt, return_tensors="pt").to(device)
-    out = model.generate(ids, args.max_new_tokens)[0].tolist()
+    out = model.generate(
+        ids,
+        args.max_new_tokens,
+        temperature=args.temperature,
+        top_k=args.top_k,
+        top_p=args.top_p,
+        repetition_penalty=args.repetition_penalty,
+        no_repeat_ngram_size=args.no_repeat_ngram_size,
+    )[0].tolist()
     print(tokenizer.decode(out))
 
 

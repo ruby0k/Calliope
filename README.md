@@ -190,6 +190,16 @@ uv run python scripts/sample_fixed_prompts.py --samples-per-prompt 4
 
 The fixed prompt set is grouped by `story_start`, `continuation`, `dialogue`, `cause_effect`, and `ending`. Each sample row includes simple quality metrics: `repetition_score`, `eos_inside_output`, `unfinished_sentence`, `average_sentence_length`, `unique_token_ratio`, and `character_name_consistency`.
 
+Sampling defaults:
+
+```text
+temperature = 0.8
+top_k = 50
+top_p = 0.92
+repetition_penalty = 1.15
+no_repeat_ngram_size = 3
+```
+
 Check prepared train/val shard quality:
 
 ```powershell

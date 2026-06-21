@@ -95,6 +95,38 @@ class Block(nn.Module):
         return x
 
 
+def apply_repetition_penalty(logits: torch.Tensor, generated_ids: list[int], penalty: float) -> torch.Tensor:
+    if penalty == 1.0:
+        return logits
+    for token_id in set(generated_ids):
+        logits[token_id] = logits[token_id] / penalty if logits[token_id] > 0 else logits[token_id] * penalty
+    return logits
+
+
+def banned_ngram_tokens(generated: list[int], ngram_size: int) -> set[int]:
+    if ngram_size <= 0 or len(generated) < ngram_size - 1:
+        return set()
+    prefix = tuple(generated[-(ngram_size - 1) :])
+    banned = set()
+    for i in range(len(generated) - ngram_size + 1):
+        ngram = tuple(generated[i : i + ngram_size])
+        if ngram[:-1] == prefix:
+            banned.add(ngram[-1])
+    return banned
+
+
+def top_p_filter(logits: torch.Tensor, top_p: float | None) -> torch.Tensor:
+    if top_p is None or top_p >= 1.0:
+        return logits
+    sorted_logits, sorted_idx = torch.sort(logits, descending=True)
+    probs = F.softmax(sorted_logits, dim=-1)
+    remove = torch.cumsum(probs, dim=-1) > top_p
+    remove[..., 1:] = remove[..., :-1].clone()
+    remove[..., 0] = False
+    logits[sorted_idx[remove]] = -float("inf")
+    return logits
+
+
 class Transformer(nn.Module):
     def __init__(self, config: ModelConfig):
         super().__init__()
@@ -138,16 +170,26 @@ class Transformer(nn.Module):
         max_new_tokens: int,
         temperature: float = 0.8,
         top_k: int | None = 50,
+        top_p: float | None = 0.92,
+        repetition_penalty: float = 1.15,
+        no_repeat_ngram_size: int = 3,
     ) -> torch.Tensor:
+        generated_ids = idx[0].tolist()
         for _ in range(max_new_tokens):
             idx_cond = idx[:, -self.config.block_size :]
             logits, _ = self(idx_cond)
-            logits = logits[:, -1, :] / temperature
+            logits = logits[0, -1, :] / temperature
+            logits = apply_repetition_penalty(logits, generated_ids, repetition_penalty)
+            for token_id in banned_ngram_tokens(generated_ids, no_repeat_ngram_size):
+                logits[token_id] = -float("inf")
             if top_k is not None:
                 values, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < values[:, [-1]]] = -float("inf")
+                logits[logits < values[-1]] = -float("inf")
+            logits = top_p_filter(logits, top_p)
             probs = F.softmax(logits, dim=-1)
-            idx = torch.cat((idx, torch.multinomial(probs, num_samples=1)), dim=1)
+            next_id = torch.multinomial(probs, num_samples=1)
+            generated_ids.append(int(next_id))
+            idx = torch.cat((idx, next_id.view(1, 1)), dim=1)
         return idx
 
     def configure_optimizer(self, train_config) -> torch.optim.Optimizer:

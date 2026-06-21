@@ -7,12 +7,25 @@ def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def by_key(rows: list[dict]) -> dict[tuple[str, int], str]:
-    return {(row["prompt"], row["sample_index"]): row["text"] for row in rows}
+def by_key(rows: list[dict]) -> dict[tuple[str, int], dict]:
+    return {(row["prompt"], row["sample_index"]): row for row in rows}
 
 
 def final_metric(path: Path) -> dict:
     return read_jsonl(path)[-1]
+
+
+def best_metric(path: Path) -> dict:
+    return min(read_jsonl(path), key=lambda row: row["val_loss"])
+
+
+def avg(rows: list[dict], key: str) -> float:
+    values = [float(row[key]) for row in rows if key in row]
+    return sum(values) / len(values) if values else 0.0
+
+
+def count_true(rows: list[dict], key: str) -> int:
+    return sum(bool(row.get(key)) for row in rows)
 
 
 def clip(text: str, limit: int = 900) -> str:
@@ -34,11 +47,15 @@ def main() -> None:
     thirtym_dir = Path(args.thirtym_dir)
     tenm_metrics = final_metric(tenm_dir / "metrics.jsonl")
     thirtym_metrics = final_metric(thirtym_dir / "metrics.jsonl")
-    tenm = by_key(read_jsonl(tenm_dir / "fixed_prompt_samples.jsonl"))
-    thirtym = by_key(read_jsonl(thirtym_dir / "fixed_prompt_samples.jsonl"))
+    tenm_best = best_metric(tenm_dir / "metrics.jsonl")
+    thirtym_best = best_metric(thirtym_dir / "metrics.jsonl")
+    tenm_rows = read_jsonl(tenm_dir / "fixed_prompt_samples.jsonl")
+    thirtym_rows = read_jsonl(thirtym_dir / "fixed_prompt_samples.jsonl")
+    tenm = by_key(tenm_rows)
+    thirtym = by_key(thirtym_rows)
     keys = sorted(set(tenm) & set(thirtym))
 
-    winner = args.left_label if tenm_metrics["val_loss"] <= thirtym_metrics["val_loss"] else args.right_label
+    winner = args.left_label if tenm_best["val_loss"] <= thirtym_best["val_loss"] else args.right_label
     lines = [
         f"# {args.title}",
         "",
@@ -49,12 +66,19 @@ def main() -> None:
         f"- prompts compared: {len({prompt for prompt, _ in keys})}",
         f"- samples compared: {len(keys)}",
         "",
-        "## Final Metrics",
+        "## Training Metrics",
         "",
-        "| Model | Iter | Train Loss | Val Loss | Loss EMA | VRAM GB |",
-        "|---|---:|---:|---:|---:|---:|",
-        f"| {args.left_label} | {tenm_metrics.get('iter')} | {tenm_metrics.get('train_loss'):.4f} | {tenm_metrics.get('val_loss'):.4f} | {tenm_metrics.get('loss_ema', 0):.4f} | {tenm_metrics.get('vram_gb', 0):.3f} |",
-        f"| {args.right_label} | {thirtym_metrics.get('iter')} | {thirtym_metrics.get('train_loss'):.4f} | {thirtym_metrics.get('val_loss'):.4f} | {thirtym_metrics.get('loss_ema', 0):.4f} | {thirtym_metrics.get('vram_gb', 0):.3f} |",
+        "| Model | Best Iter | Best Val Loss | Final Iter | Final Val Loss | Final Loss EMA | VRAM GB |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+        f"| {args.left_label} | {tenm_best.get('iter')} | {tenm_best.get('val_loss'):.4f} | {tenm_metrics.get('iter')} | {tenm_metrics.get('val_loss'):.4f} | {tenm_metrics.get('loss_ema', 0):.4f} | {tenm_metrics.get('vram_gb', 0):.3f} |",
+        f"| {args.right_label} | {thirtym_best.get('iter')} | {thirtym_best.get('val_loss'):.4f} | {thirtym_metrics.get('iter')} | {thirtym_metrics.get('val_loss'):.4f} | {thirtym_metrics.get('loss_ema', 0):.4f} | {thirtym_metrics.get('vram_gb', 0):.3f} |",
+        "",
+        "## Sample Quality Metrics",
+        "",
+        "| Model | Avg Repetition | EOS Count | Unfinished Count | Avg Sentence Len | Unique Token Ratio | Name Consistency |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+        f"| {args.left_label} | {avg(tenm_rows, 'repetition_score'):.4f} | {count_true(tenm_rows, 'eos_inside_output')} | {count_true(tenm_rows, 'unfinished_sentence')} | {avg(tenm_rows, 'average_sentence_length'):.2f} | {avg(tenm_rows, 'unique_token_ratio'):.4f} | {avg(tenm_rows, 'character_name_consistency'):.4f} |",
+        f"| {args.right_label} | {avg(thirtym_rows, 'repetition_score'):.4f} | {count_true(thirtym_rows, 'eos_inside_output')} | {count_true(thirtym_rows, 'unfinished_sentence')} | {avg(thirtym_rows, 'average_sentence_length'):.2f} | {avg(thirtym_rows, 'unique_token_ratio'):.4f} | {avg(thirtym_rows, 'character_name_consistency'):.4f} |",
         "",
         "## Readout",
         "",
@@ -72,11 +96,11 @@ def main() -> None:
             "",
             f"**{args.left_label}**",
             "",
-            clip(tenm[(prompt, sample_index)]),
+            clip(tenm[(prompt, sample_index)]["text"]),
             "",
             f"**{args.right_label}**",
             "",
-            clip(thirtym[(prompt, sample_index)]),
+            clip(thirtym[(prompt, sample_index)]["text"]),
             "",
         ]
 
