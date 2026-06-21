@@ -82,11 +82,13 @@ bias = False
 Calliope-30M:
 
 ```python
-block_size = 256
+block_size = 512
 n_layer = 6
 n_head = 6
 n_embd = 384
-batch_size = 4
+dropout = 0.1
+rope_theta = 50000
+batch_size = 2
 grad_accum_steps = 16
 ```
 
