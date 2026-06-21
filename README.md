@@ -169,6 +169,8 @@ Generate 12 samples from the fixed prompt set:
 uv run python scripts/sample_fixed_prompts.py --samples-per-prompt 4
 ```
 
+The fixed prompt set is grouped by `story_start`, `continuation`, `dialogue`, `cause_effect`, and `ending`. Each sample row includes simple quality metrics: `repetition_score`, `eos_inside_output`, `unfinished_sentence`, `average_sentence_length`, `unique_token_ratio`, and `character_name_consistency`.
+
 Check prepared train/val shard quality:
 
 ```powershell

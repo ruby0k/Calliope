@@ -1,5 +1,51 @@
-PROMPTS = [
-    "Once upon a time",
-    "Lily found a tiny",
-    "The little dog wanted",
-]
+PROMPT_CATEGORIES = {
+    "story_start": [
+        "Once upon a time",
+        "Lily found a tiny",
+        "The little dog wanted",
+        "Mia saw a shiny key",
+        "Ben heard a soft noise",
+        "The small bird could not",
+        "Nora looked under the bed",
+        "A red balloon floated",
+    ],
+    "continuation": [
+        "Tom opened the box and saw",
+        "The rabbit was afraid because",
+        "Anna wanted to say sorry because",
+        "The cake fell on the floor, and",
+        "Sam looked behind the tree and found",
+        "The kitten ran into the garden when",
+        "Ella could not sleep because",
+        "The old clock started to ring when",
+    ],
+    "dialogue": [
+        "\"I don't want to share,\" said Timmy.",
+        "\"Why are you crying?\" asked Lily.",
+        "\"Please come back,\" said Anna.",
+        "\"That is not fair,\" said Max.",
+        "\"Can I help you?\" asked Tom.",
+        "\"I am scared,\" whispered Mia.",
+        "\"We can fix it,\" said Dad.",
+    ],
+    "cause_effect": [
+        "Max broke the toy, so",
+        "The girl forgot her lunch, so",
+        "The dog ran away because",
+        "Lily told the truth, so",
+        "Tom did not listen, so",
+        "The rain started falling, so",
+        "Anna shared her crayons, so",
+    ],
+    "ending": [
+        "In the end, Lily learned",
+        "After that day, the dog always",
+        "From then on, Tom remembered",
+        "At bedtime, Anna smiled because",
+        "The next morning, Max felt",
+        "Everyone was happy because",
+        "And that is how the little rabbit",
+    ],
+}
+
+PROMPTS = [prompt for prompts in PROMPT_CATEGORIES.values() for prompt in prompts]
