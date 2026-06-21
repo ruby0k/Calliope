@@ -92,6 +92,19 @@ batch_size = 2
 grad_accum_steps = 16
 ```
 
+Calliope-100M:
+
+```python
+block_size = 512
+n_layer = 8
+n_head = 12
+n_embd = 768
+dropout = 0.1
+rope_theta = 50000
+batch_size = 1
+grad_accum_steps = 16
+```
+
 ## Setup
 
 ```powershell
@@ -129,6 +142,12 @@ Train Calliope-30M:
 
 ```powershell
 uv run python -m train.train --config configs.calliope_30m --run-name Calliope-30M-run001
+```
+
+Train Calliope-100M:
+
+```powershell
+uv run python -m train.train --config configs.calliope_100m --run-name Calliope-100M-run001
 ```
 
 Experiment configs:
