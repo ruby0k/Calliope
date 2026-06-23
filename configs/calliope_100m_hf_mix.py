@@ -10,7 +10,10 @@ model_config = ModelConfig(
 )
 
 train_config = TrainConfig(
-    out_dir="checkpoints/calliope_100m",
+    data_dir="data/hf_mix_gpt2",
+    out_dir="checkpoints/calliope_100m_hf_mix",
     batch_size=8,
     grad_accum_steps=2,
+    sequential_train=False,
+    early_stop_patience=4,
 )

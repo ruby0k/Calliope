@@ -1,0 +1,61 @@
+{
+  "tokenizer": "gpt2",
+  "sources": [
+    {
+      "key": "calliope",
+      "path": "ruby0k/calliope_data",
+      "name": null,
+      "train_docs": 29917,
+      "train_tokens": 12017386,
+      "val_docs": 323,
+      "val_tokens": 130366
+    },
+    {
+      "key": "fineweb_edu",
+      "path": "HuggingFaceFW/fineweb-edu",
+      "name": "sample-10BT",
+      "train_docs": 22610,
+      "train_tokens": 23437420,
+      "val_docs": 234,
+      "val_tokens": 262670
+    },
+    {
+      "key": "simplestories",
+      "path": "SimpleStories/SimpleStories",
+      "name": null,
+      "train_docs": 409654,
+      "train_tokens": 117317310,
+      "val_docs": 4154,
+      "val_tokens": 1183008
+    },
+    {
+      "key": "wikitext",
+      "path": "Salesforce/wikitext",
+      "name": "wikitext-103-raw-v1",
+      "train_docs": 702651,
+      "train_tokens": 70396680,
+      "val_docs": 7125,
+      "val_tokens": 703418
+    },
+    {
+      "key": "tinystories",
+      "path": "roneneldan/TinyStories",
+      "name": null,
+      "train_docs": 1045586,
+      "train_tokens": 234655530,
+      "val_docs": 10491,
+      "val_tokens": 2344674
+    }
+  ],
+  "streaming": true,
+  "fineweb_config": "sample-10BT",
+  "val_every": 100,
+  "shuffle_buffer": 1000,
+  "token_budgets": {
+    "calliope": 23700000,
+    "fineweb_edu": 23700000,
+    "simplestories": 118500000,
+    "wikitext": 71100000,
+    "tinystories": 237000000
+  }
+}

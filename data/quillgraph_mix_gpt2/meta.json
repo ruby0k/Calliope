@@ -1,0 +1,39 @@
+{
+  "tokenizer": "gpt2",
+  "train_order": [
+    "jsonl_train_sources",
+    "TinyStories/train"
+  ],
+  "val_order": [
+    "jsonl_val_sources"
+  ],
+  "quill_val_every": 20,
+  "jsonl_sources": [
+    {
+      "source": "D:\\Hegemony\\QuillGraph\\datasets\\txt_sources_dataset.jsonl",
+      "train_docs": 330,
+      "train_tokens": 151080,
+      "val_docs": 17,
+      "val_tokens": 7523
+    },
+    {
+      "source": "D:\\Hegemony\\QuillGraph\\datasets\\calliope_dataset.jsonl",
+      "train_docs": 36,
+      "train_tokens": 44656,
+      "val_docs": 1,
+      "val_tokens": 836
+    },
+    {
+      "source": "D:\\Hegemony\\QuillGraph\\datasets\\orv_dataset.jsonl",
+      "train_docs": 4726,
+      "train_tokens": 1986583,
+      "val_docs": 248,
+      "val_tokens": 104219
+    }
+  ],
+  "tinystories_train": {
+    "source": "TinyStories/train",
+    "docs": 2119719,
+    "tokens": 473992236
+  }
+}

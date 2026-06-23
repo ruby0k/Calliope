@@ -40,10 +40,10 @@ def append_jsonl(path: str | Path, row: dict) -> None:
 
 
 @torch.no_grad()
-def estimate_loss(model, get_batch_for_split, eval_iters: int, ctx) -> dict[str, float]:
+def estimate_loss(model, get_batch_for_split, eval_iters: int, ctx, splits=("train", "val")) -> dict[str, float]:
     out = {}
     model.eval()
-    for split in ("train", "val"):
+    for split in splits:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             x, y = get_batch_for_split(split)

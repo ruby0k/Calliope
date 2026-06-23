@@ -38,3 +38,6 @@ class TrainConfig:
     grad_clip: float = 1.0
     loss_ema_beta: float = 0.98
     compile: bool = False
+    sequential_train: bool = False
+    early_stop_patience: int = 0
+    early_stop_min_delta: float = 0.0
