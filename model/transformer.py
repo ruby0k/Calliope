@@ -173,6 +173,7 @@ class Transformer(nn.Module):
         top_p: float | None = 0.92,
         repetition_penalty: float = 1.15,
         no_repeat_ngram_size: int = 3,
+        eos_token_id: int | None = None,
     ) -> torch.Tensor:
         generated_ids = idx[0].tolist()
         for _ in range(max_new_tokens):
@@ -188,8 +189,12 @@ class Transformer(nn.Module):
             logits = top_p_filter(logits, top_p)
             probs = F.softmax(logits, dim=-1)
             next_id = torch.multinomial(probs, num_samples=1)
-            generated_ids.append(int(next_id))
+            token = int(next_id)
+            generated_ids.append(token)
             idx = torch.cat((idx, next_id.view(1, 1)), dim=1)
+            # Stop at end-of-document so we don't emit <|endoftext|> and run on into a new doc.
+            if eos_token_id is not None and token == eos_token_id:
+                break
         return idx
 
     def configure_optimizer(self, train_config) -> torch.optim.Optimizer:

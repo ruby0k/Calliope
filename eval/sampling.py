@@ -42,8 +42,8 @@ def generate_text(model, tokenizer, prompt: str, device: str, max_new_tokens: in
         ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
     else:
         ids = torch.tensor([[tokenizer.eos_token_id]], device=device)
-    out = model.generate(ids, max_new_tokens, **sampling)[0].tolist()
+    out = model.generate(ids, max_new_tokens, eos_token_id=tokenizer.eos_token_id, **sampling)[0].tolist()
     generated_ids = out[ids.shape[1] :]
-    # Drop the leading BOS token from unconditional text so the opening is the model's own words.
-    text = tokenizer.decode(out if prompt else out[1:])
+    # skip_special_tokens drops the leading BOS (unconditional) and any trailing <|endoftext|>.
+    text = tokenizer.decode(out, skip_special_tokens=True)
     return text, generated_ids

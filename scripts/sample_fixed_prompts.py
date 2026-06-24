@@ -56,9 +56,10 @@ def main() -> None:
                         top_p=args.top_p,
                         repetition_penalty=args.repetition_penalty,
                         no_repeat_ngram_size=args.no_repeat_ngram_size,
+                        eos_token_id=tokenizer.eos_token_id,
                     )[0].tolist()
                     generated_ids = out[ids.shape[1] :]
-                    text = tokenizer.decode(out)
+                    text = tokenizer.decode(out, skip_special_tokens=True)
                     row = {
                         "category": category,
                         "prompt": prompt,
