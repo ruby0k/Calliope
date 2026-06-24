@@ -37,6 +37,18 @@ def load_for_sampling(checkpoint: str, adapter: str, device: str):
     return model, tokenizer, base_ckpt
 
 
+def load_composed(base_checkpoint: str, adapter_paths: list[str], device: str):
+    """Load the base with K LoRA experts layered for weighted composition.
+    Returns (model, tokenizer, base_ckpt, weights) — set `weights` in place
+    via model.lora.set_composition_weights between evaluations."""
+    from model.lora import inject_composed_lora
+
+    model, tokenizer, base_ckpt = load_model_and_tokenizer(base_checkpoint, device)
+    weights = inject_composed_lora(model, adapter_paths, device)
+    model.eval()
+    return model, tokenizer, base_ckpt, weights
+
+
 def generate_text(model, tokenizer, prompt: str, device: str, max_new_tokens: int, **sampling) -> tuple[str, list[int]]:
     if prompt:
         ids = tokenizer.encode(prompt, return_tensors="pt").to(device)

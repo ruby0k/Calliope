@@ -65,3 +65,59 @@ def load_lora(path, model: nn.Module, device: str = "cpu") -> dict:
     ckpt = torch.load(path, map_location=device, weights_only=False)
     model.load_state_dict(ckpt["lora"], strict=False)
     return ckpt
+
+
+class ComposedLoRALinear(nn.Module):
+    """base(x) + sum_i w_i * scaling_i * (x A_i^T B_i^T).
+
+    Holds K frozen LoRA experts; the weight vector `weights` is a single shared
+    tensor (length K) used by every composed layer, so a search/router sets all
+    layers' mixing coefficients in one in-place update. Inference only."""
+
+    def __init__(self, base: nn.Linear, adapters: list[dict], weights: torch.Tensor):
+        super().__init__()
+        self.base = base
+        self.weights = weights  # shared (K,) tensor, set externally
+        self.scaling = [a["scaling"] for a in adapters]
+        self.k = len(adapters)
+        for i, a in enumerate(adapters):
+            self.register_buffer(f"A_{i}", a["A"], persistent=False)
+            self.register_buffer(f"B_{i}", a["B"], persistent=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.base(x)
+        for i in range(self.k):
+            delta = (x @ getattr(self, f"A_{i}").t()) @ getattr(self, f"B_{i}").t()
+            out = out + (self.weights[i] * self.scaling[i]) * delta
+        return out
+
+
+def inject_composed_lora(model: nn.Module, adapter_paths: list[str], device: str) -> torch.Tensor:
+    """Layer base + K LoRA experts into one model for weighted composition.
+    All adapters must share the same target layers. Returns the shared (K,)
+    weight tensor (init zeros = pure base); set it with set_composition_weights."""
+    metas = [torch.load(p, map_location="cpu", weights_only=False) for p in adapter_paths]
+    targets = set(metas[0]["lora_config"]["targets"])
+    scalings = [m["lora_config"]["alpha"] / m["lora_config"]["rank"] for m in metas]
+    sds = [m["lora"] for m in metas]
+    base_dtype = next(model.parameters()).dtype
+    weights = torch.zeros(len(metas), device=device)
+
+    names = [n for n, m in model.named_modules() if isinstance(m, nn.Linear) and n.split(".")[-1] in targets]
+    for name in names:
+        parent, attr = _get_parent(model, name)
+        base = getattr(parent, attr)
+        adapters = [
+            {
+                "A": sd[f"{name}.lora_A"].to(device=device, dtype=base_dtype),
+                "B": sd[f"{name}.lora_B"].to(device=device, dtype=base_dtype),
+                "scaling": sc,
+            }
+            for sd, sc in zip(sds, scalings)
+        ]
+        setattr(parent, attr, ComposedLoRALinear(base, adapters, weights))
+    return weights
+
+
+def set_composition_weights(weights: torch.Tensor, values) -> None:
+    weights.copy_(torch.tensor(list(values), dtype=weights.dtype, device=weights.device))

@@ -18,6 +18,7 @@ SOURCES = [
     ("simplestories", "SimpleStories/SimpleStories", None, "train"),
     ("wikitext", "Salesforce/wikitext", "wikitext-103-raw-v1", "train"),
     ("tinystories", "roneneldan/TinyStories", None, "train"),
+    ("code", "codeparrot/codeparrot-clean", None, "train"),
 ]
 
 
@@ -95,6 +96,7 @@ def write_mix(train_f, val_files, tokenizer, args) -> list[dict]:
         "simplestories": limit_arg(args.max_simplestories_docs),
         "wikitext": limit_arg(args.max_wikitext_docs),
         "tinystories": limit_arg(args.max_tinystories_docs),
+        "code": limit_arg(args.max_code_docs),
     }
     token_limits = {
         "calliope": limit_arg(args.max_calliope_tokens),
@@ -102,6 +104,7 @@ def write_mix(train_f, val_files, tokenizer, args) -> list[dict]:
         "simplestories": limit_arg(args.max_simplestories_tokens),
         "wikitext": limit_arg(args.max_wikitext_tokens),
         "tinystories": limit_arg(args.max_tinystories_tokens),
+        "code": limit_arg(args.max_code_tokens),
     }
     streams = []
     for key, path, name, split in SOURCES:
@@ -167,6 +170,8 @@ def main() -> None:
     parser.add_argument("--max-fineweb-tokens", type=int, default=23_700_000)
     parser.add_argument("--max-wikitext-tokens", type=int, default=71_100_000)
     parser.add_argument("--max-calliope-tokens", type=int, default=23_700_000)
+    parser.add_argument("--max-code-docs", type=int, default=-1)
+    parser.add_argument("--max-code-tokens", type=int, default=98_000_000)
     parser.add_argument("--val-every", type=int, default=100)
     parser.add_argument("--shuffle-buffer", type=int, default=1000)
     parser.add_argument("--progress-every", type=int, default=1000)
@@ -206,6 +211,7 @@ def main() -> None:
             "simplestories": args.max_simplestories_tokens,
             "wikitext": args.max_wikitext_tokens,
             "tinystories": args.max_tinystories_tokens,
+            "code": args.max_code_tokens,
         },
     }
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")

@@ -1,0 +1,195 @@
+{
+  "base": "checkpoints/calliope_100m_base_mix_v2/best.pt",
+  "experts": [
+    "wiki",
+    "fineweb"
+  ],
+  "grid": [
+    0.0,
+    0.5,
+    1.0,
+    1.5
+  ],
+  "results": [
+    {
+      "weights": [
+        0.0,
+        0.0
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.3219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        0.0,
+        0.5
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.3219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        0.0,
+        1.0
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.3219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        0.0,
+        1.5
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.3219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        0.5,
+        0.0
+      ],
+      "once_upon_rate": 0.05,
+      "opening_entropy": 4.3219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        0.5,
+        0.5
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.3219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        0.5,
+        1.0
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.3219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        0.5,
+        1.5
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.3219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        1.0,
+        0.0
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.2219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        1.0,
+        0.5
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.2219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        1.0,
+        1.0
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.3219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        1.0,
+        1.5
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.0842,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        1.5,
+        0.0
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.2219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        1.5,
+        0.5
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.3219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        1.5,
+        1.0
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.2219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.0
+    },
+    {
+      "weights": [
+        1.5,
+        1.5
+      ],
+      "once_upon_rate": 0.0,
+      "opening_entropy": 4.1219,
+      "unique_opening_ratio": 1.0,
+      "mean_repetition": 0.001
+    }
+  ],
+  "base_row": {
+    "weights": [
+      0.0,
+      0.0
+    ],
+    "once_upon_rate": 0.0,
+    "opening_entropy": 4.3219,
+    "unique_opening_ratio": 1.0,
+    "mean_repetition": 0.0
+  },
+  "best": {
+    "weights": [
+      0.0,
+      0.0
+    ],
+    "once_upon_rate": 0.0,
+    "opening_entropy": 4.3219,
+    "unique_opening_ratio": 1.0,
+    "mean_repetition": 0.0
+  }
+}

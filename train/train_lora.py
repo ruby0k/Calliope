@@ -33,6 +33,7 @@ def main() -> None:
     parser.add_argument("--out-dir", default="")
     parser.add_argument("--run-name", default="")
     parser.add_argument("--max-iters", type=int, default=None)
+    parser.add_argument("--batch-size", type=int, default=None)
     args = parser.parse_args()
 
     cfg = load_lora_config(args.config)
@@ -46,6 +47,8 @@ def main() -> None:
         cfg.run_name = args.run_name
     if args.max_iters is not None:
         cfg.max_iters = args.max_iters
+    if args.batch_size is not None:
+        cfg.batch_size = args.batch_size
 
     seed_everything(cfg.seed)
     device = pick_device()

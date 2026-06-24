@@ -4,7 +4,11 @@ import torch
 
 
 def save_checkpoint(path: str | Path, model, optimizer, iter_num: int, best_val_loss: float, meta: dict) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Write to a temp file then atomically replace, so a stop/kill mid-write
+    # can never corrupt the resumable checkpoint.
+    tmp = path.with_suffix(path.suffix + ".tmp")
     torch.save(
         {
             "model": model.state_dict(),
@@ -13,8 +17,9 @@ def save_checkpoint(path: str | Path, model, optimizer, iter_num: int, best_val_
             "best_val_loss": best_val_loss,
             **meta,
         },
-        path,
+        tmp,
     )
+    tmp.replace(path)
 
 
 def load_checkpoint(path: str | Path, model=None, optimizer=None, device: str = "cpu") -> tuple[int, float, dict]:

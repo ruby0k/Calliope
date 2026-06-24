@@ -59,6 +59,7 @@ def main() -> None:
     parser.add_argument("--eval-iters", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--grad-accum-steps", type=int, default=None)
+    parser.add_argument("--ckpt-interval", type=int, default=None)
     parser.add_argument("--early-stop-patience", type=int, default=None)
     parser.add_argument("--run-name", default="")
     args = parser.parse_args()
@@ -72,6 +73,8 @@ def main() -> None:
         train_cfg.batch_size = args.batch_size
     if args.grad_accum_steps is not None:
         train_cfg.grad_accum_steps = args.grad_accum_steps
+    if args.ckpt_interval is not None:
+        train_cfg.ckpt_interval = args.ckpt_interval
     if args.early_stop_patience is not None:
         train_cfg.early_stop_patience = args.early_stop_patience
     if args.run_name:
