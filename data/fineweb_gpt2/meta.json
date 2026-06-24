@@ -1,0 +1,25 @@
+{
+  "tokenizer": "gpt2",
+  "sources": [
+    {
+      "key": "fineweb_edu",
+      "path": "HuggingFaceFW/fineweb-edu",
+      "name": "sample-10BT",
+      "train_docs": 67928,
+      "train_tokens": 70230793,
+      "val_docs": 686,
+      "val_tokens": 769250
+    }
+  ],
+  "streaming": true,
+  "fineweb_config": "sample-10BT",
+  "val_every": 100,
+  "shuffle_buffer": 1000,
+  "token_budgets": {
+    "calliope": 23700000,
+    "fineweb_edu": 71000000,
+    "simplestories": 118500000,
+    "wikitext": 71100000,
+    "tinystories": 237000000
+  }
+}

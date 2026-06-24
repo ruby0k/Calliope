@@ -1,6 +1,5 @@
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -10,50 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from eval.fixed_prompts import PROMPT_CATEGORIES
+from eval.metrics import quality_metrics
 from model import ModelConfig, Transformer
 from train.checkpoint import load_checkpoint
-
-
-KNOWN_NAMES = {"Anna", "Ben", "Dad", "Ella", "Lily", "Max", "Mia", "Nora", "Sam", "Timmy", "Tom"}
-
-
-def words(text: str) -> list[str]:
-    return re.findall(r"[A-Za-z']+", text)
-
-
-def sentence_lengths(text: str) -> list[int]:
-    return [len(words(part)) for part in re.split(r"[.!?]+", text) if words(part)]
-
-
-def repetition_score(tokens: list[str], n: int = 4) -> float:
-    if len(tokens) < n:
-        return 0.0
-    grams = [tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)]
-    return round(1.0 - len(set(grams)) / len(grams), 4)
-
-
-def character_name_consistency(prompt: str, text: str) -> float:
-    prompt_names = set(words(prompt)) & KNOWN_NAMES
-    text_names = [name for name in words(text) if name in KNOWN_NAMES]
-    if not text_names:
-        return 1.0
-    if prompt_names:
-        return round(sum(name in prompt_names for name in text_names) / len(text_names), 4)
-    counts = {name: text_names.count(name) for name in set(text_names)}
-    return round(max(counts.values()) / len(text_names), 4)
-
-
-def quality_metrics(prompt: str, text: str, generated_ids: list[int], eos_id: int) -> dict:
-    toks = words(text)
-    lengths = sentence_lengths(text)
-    return {
-        "repetition_score": repetition_score(toks),
-        "eos_inside_output": eos_id in generated_ids,
-        "unfinished_sentence": not text.rstrip().endswith((".", "!", "?", "\"")),
-        "average_sentence_length": round(sum(lengths) / len(lengths), 2) if lengths else 0.0,
-        "unique_token_ratio": round(len(set(generated_ids)) / len(generated_ids), 4) if generated_ids else 0.0,
-        "character_name_consistency": character_name_consistency(prompt, text),
-    }
 
 
 def main() -> None:

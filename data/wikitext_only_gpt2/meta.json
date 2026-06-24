@@ -1,0 +1,25 @@
+{
+  "tokenizer": "gpt2",
+  "sources": [
+    {
+      "key": "wikitext",
+      "path": "Salesforce/wikitext",
+      "name": "wikitext-103-raw-v1",
+      "train_docs": 702679,
+      "train_tokens": 70393868,
+      "val_docs": 7097,
+      "val_tokens": 706230
+    }
+  ],
+  "streaming": true,
+  "fineweb_config": "sample-10BT",
+  "val_every": 100,
+  "shuffle_buffer": 1000,
+  "token_budgets": {
+    "calliope": 23700000,
+    "fineweb_edu": 23700000,
+    "simplestories": 118500000,
+    "wikitext": 71100000,
+    "tinystories": 237000000
+  }
+}

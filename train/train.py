@@ -13,6 +13,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from eval.sampling import generate_text
 from model import ModelConfig, Transformer
 from train.checkpoint import load_checkpoint, save_checkpoint
 from train.dataset import get_batch, get_sequential_batch, load_split
@@ -34,11 +35,16 @@ def load_config(name: str):
     return module.model_config, module.train_config
 
 
-def maybe_sample(model, tokenizer, device: str, max_tokens: int) -> str:
-    prompt = "Once upon a time"
-    ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
-    out = model.generate(ids, max_new_tokens=max_tokens)[0].tolist()
-    return tokenizer.decode(out)
+def maybe_sample(model, tokenizer, device: str, max_tokens: int, prompts) -> dict[str, str]:
+    """Sample one generation per configured prompt. An empty prompt is unconditional
+    (BOS-only), which is the only way to actually observe the model's opening bias."""
+    model.eval()
+    samples = {}
+    for prompt in prompts:
+        text, _ = generate_text(model, tokenizer, prompt, device, max_tokens)
+        samples["unconditional" if prompt == "" else prompt] = text
+    model.train()
+    return samples
 
 
 def is_improved(val_loss: float, best_val_loss: float, min_delta: float) -> bool:
@@ -172,7 +178,11 @@ def main() -> None:
                 bad_evals = 0
             else:
                 bad_evals += 1
-                stop_training = train_cfg.early_stop_patience > 0 and bad_evals >= train_cfg.early_stop_patience
+                stop_training = (
+                    train_cfg.early_stop_patience > 0
+                    and iter_num >= train_cfg.early_stop_min_iters
+                    and bad_evals >= train_cfg.early_stop_patience
+                )
 
             row = {
                 "iter": iter_num,
@@ -190,7 +200,7 @@ def main() -> None:
             if stop_training:
                 row["early_stopped"] = True
             if tokenizer and (iter_num % train_cfg.sample_interval == 0 or iter_num == train_cfg.max_iters):
-                row["sample"] = maybe_sample(model, tokenizer, device, train_cfg.sample_tokens)
+                row["samples"] = maybe_sample(model, tokenizer, device, train_cfg.sample_tokens, train_cfg.sample_prompts)
             append_jsonl(exp_dir / "metrics.jsonl", row)
             print(json.dumps(row, ensure_ascii=True))
 
