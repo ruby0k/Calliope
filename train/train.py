@@ -30,6 +30,24 @@ def get_lr(iter_num: int, cfg) -> float:
     return cfg.min_lr + coeff * (cfg.learning_rate - cfg.min_lr)
 
 
+def lr_fraction(iter_num: int, cfg) -> float:
+    """Schedule as a fraction of peak LR (in [min_ratio, 1]). Each optimizer group is
+    scaled by this, so Muon and AdamW keep their own peak LRs. Supports cosine and WSD."""
+    if iter_num < cfg.warmup_iters:
+        return (iter_num + 1) / cfg.warmup_iters
+    min_ratio = cfg.min_lr / cfg.learning_rate
+    if getattr(cfg, "lr_schedule", "cosine") == "wsd":
+        decay_start = int(cfg.max_iters * (1.0 - getattr(cfg, "wsd_decay_frac", 0.2)))
+        if iter_num < decay_start:
+            return 1.0
+        prog = (iter_num - decay_start) / max(1, cfg.max_iters - decay_start)
+        return min_ratio + (1 - min_ratio) * 0.5 * (1 + math.cos(math.pi * min(1.0, prog)))
+    if iter_num > cfg.max_iters:
+        return min_ratio
+    prog = (iter_num - cfg.warmup_iters) / (cfg.max_iters - cfg.warmup_iters)
+    return min_ratio + (1 - min_ratio) * 0.5 * (1 + math.cos(math.pi * prog))
+
+
 def load_config(name: str):
     module = importlib.import_module(name)
     return module.model_config, module.train_config
@@ -61,6 +79,11 @@ def main() -> None:
     parser.add_argument("--grad-accum-steps", type=int, default=None)
     parser.add_argument("--ckpt-interval", type=int, default=None)
     parser.add_argument("--early-stop-patience", type=int, default=None)
+    parser.add_argument("--optimizer", default=None, choices=["adamw", "muon"])
+    parser.add_argument("--lr-schedule", default=None, choices=["cosine", "wsd"])
+    parser.add_argument("--muon-lr", type=float, default=None)
+    parser.add_argument("--warmup-iters", type=int, default=None)
+    parser.add_argument("--out-dir", default="")
     parser.add_argument("--run-name", default="")
     args = parser.parse_args()
 
@@ -77,6 +100,16 @@ def main() -> None:
         train_cfg.ckpt_interval = args.ckpt_interval
     if args.early_stop_patience is not None:
         train_cfg.early_stop_patience = args.early_stop_patience
+    if args.optimizer is not None:
+        train_cfg.optimizer = args.optimizer
+    if args.lr_schedule is not None:
+        train_cfg.lr_schedule = args.lr_schedule
+    if args.muon_lr is not None:
+        train_cfg.muon_lr = args.muon_lr
+    if args.warmup_iters is not None:
+        train_cfg.warmup_iters = args.warmup_iters
+    if args.out_dir:
+        train_cfg.out_dir = args.out_dir
     if args.run_name:
         train_cfg.run_name = args.run_name
 
@@ -143,9 +176,10 @@ def main() -> None:
     loss_ema = None
     stop_training = False
     while iter_num < train_cfg.max_iters and not stop_training:
-        lr = get_lr(iter_num, train_cfg)
+        frac = lr_fraction(iter_num, train_cfg)
         for group in optimizer.param_groups:
-            group["lr"] = lr
+            group["lr"] = group["initial_lr"] * frac
+        lr = train_cfg.learning_rate * frac  # AdamW-equivalent LR, for logging
 
         optimizer.zero_grad(set_to_none=True)
         loss_accum = 0.0
@@ -167,6 +201,7 @@ def main() -> None:
             dt = time.time() - t0
             tokens = train_cfg.batch_size * train_cfg.grad_accum_steps * model_cfg.block_size * 10
             print(f"iter {iter_num}: loss {loss_accum:.4f}, ema {loss_ema:.4f}, lr {lr:.2e}, {tokens / dt:.0f} tok/s")
+            append_jsonl(exp_dir / "loss_log.jsonl", {"iter": iter_num, "loss": round(loss_accum, 4), "ema": round(loss_ema, 4), "lr": lr})
             t0 = time.time()
 
         if iter_num % train_cfg.eval_interval == 0 or iter_num == train_cfg.max_iters:

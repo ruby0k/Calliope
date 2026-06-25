@@ -89,6 +89,55 @@ def hf_iter(path: str, name: str | None, split: str, max_docs: int | None, buffe
             yield text
 
 
+def build_tokenizer(args, out_dir: Path):
+    """vocab_size<=0 -> reuse GPT-2 (50257). vocab_size>0 -> train a byte-level BPE of
+    that size on a doc sample of the ENABLED sources (so code + general text are covered)."""
+    if args.vocab_size <= 0:
+        from transformers import AutoTokenizer
+
+        tok = AutoTokenizer.from_pretrained("gpt2")
+        tok.save_pretrained(out_dir / "tokenizer")
+        return tok
+
+    from tokenizers import Tokenizer
+    from tokenizers.decoders import ByteLevel as ByteLevelDecoder
+    from tokenizers.models import BPE
+    from tokenizers.pre_tokenizers import ByteLevel
+    from tokenizers.trainers import BpeTrainer
+    from transformers import PreTrainedTokenizerFast
+
+    docs_enabled = {
+        "calliope": limit_arg(args.max_calliope_docs),
+        "fineweb_edu": limit_arg(args.max_fineweb_docs),
+        "simplestories": limit_arg(args.max_simplestories_docs),
+        "wikitext": limit_arg(args.max_wikitext_docs),
+        "tinystories": limit_arg(args.max_tinystories_docs),
+        "code": limit_arg(args.max_code_docs),
+    }
+
+    def sample_iter():
+        for key, path, name, split in SOURCES:
+            if docs_enabled[key] == 0:
+                continue
+            yield from hf_iter(path, name, split, args.max_tokenizer_docs, args.shuffle_buffer, args.seed)
+
+    raw = Tokenizer(BPE(unk_token="<unk>"))
+    raw.pre_tokenizer = ByteLevel(add_prefix_space=False)
+    raw.decoder = ByteLevelDecoder()
+    trainer = BpeTrainer(vocab_size=args.vocab_size, special_tokens=["<unk>", "<|endoftext|>"])
+    print(f"training {args.vocab_size}-token byte-level BPE on a sample of enabled sources...", flush=True)
+    raw.train_from_iterator(sample_iter(), trainer=trainer)
+    tok = PreTrainedTokenizerFast(
+        tokenizer_object=raw,
+        unk_token="<unk>",
+        eos_token="<|endoftext|>",
+        pad_token="<|endoftext|>",
+    )
+    tok.save_pretrained(out_dir / "tokenizer")
+    print(f"trained tokenizer: vocab_size={len(tok)}", flush=True)
+    return tok
+
+
 def write_mix(train_f, val_files, tokenizer, args) -> list[dict]:
     limits = {
         "calliope": limit_arg(args.max_calliope_docs),
@@ -172,6 +221,8 @@ def main() -> None:
     parser.add_argument("--max-calliope-tokens", type=int, default=23_700_000)
     parser.add_argument("--max-code-docs", type=int, default=-1)
     parser.add_argument("--max-code-tokens", type=int, default=98_000_000)
+    parser.add_argument("--vocab-size", type=int, default=0)  # 0 = GPT-2 (50257); >0 = train byte-level BPE
+    parser.add_argument("--max-tokenizer-docs", type=int, default=10000)  # per-source docs for BPE training
     parser.add_argument("--val-every", type=int, default=100)
     parser.add_argument("--shuffle-buffer", type=int, default=1000)
     parser.add_argument("--progress-every", type=int, default=1000)
@@ -181,12 +232,9 @@ def main() -> None:
     if args.val_every < 2:
         raise SystemExit("--val-every must be >= 2")
 
-    from transformers import AutoTokenizer
-
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    tokenizer.save_pretrained(out_dir / "tokenizer")
+    tokenizer = build_tokenizer(args, out_dir)
 
     val_files = {}
     try:
@@ -199,7 +247,8 @@ def main() -> None:
             f.close()
 
     meta = {
-        "tokenizer": "gpt2",
+        "tokenizer": "gpt2" if args.vocab_size <= 0 else f"bytelevel-bpe-{args.vocab_size}",
+        "vocab_size": len(tokenizer),
         "sources": sources,
         "streaming": True,
         "fineweb_config": "sample-10BT",

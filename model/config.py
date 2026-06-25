@@ -36,6 +36,11 @@ class TrainConfig:
     weight_decay: float = 0.1
     beta1: float = 0.9
     beta2: float = 0.95
+    optimizer: str = "adamw"  # "adamw" or "muon" (hybrid: Muon for hidden matrices, AdamW for the rest)
+    muon_lr: float = 0.02
+    muon_momentum: float = 0.95
+    lr_schedule: str = "cosine"  # "cosine" or "wsd" (warmup-stable-decay)
+    wsd_decay_frac: float = 0.2  # fraction of training spent in the decay phase (WSD only)
     grad_clip: float = 1.0
     loss_ema_beta: float = 0.98
     compile: bool = False

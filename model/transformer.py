@@ -197,15 +197,48 @@ class Transformer(nn.Module):
                 break
         return idx
 
-    def configure_optimizer(self, train_config) -> torch.optim.Optimizer:
-        kwargs = dict(
-            lr=train_config.learning_rate,
-            betas=(train_config.beta1, train_config.beta2),
-            weight_decay=train_config.weight_decay,
-        )
+    def configure_optimizer(self, train_config):
+        # Split params: hidden weight matrices (Muon-eligible) vs embeddings (decay) vs 1D (no decay).
+        use_muon = getattr(train_config, "optimizer", "adamw") == "muon"
+        decay, nodecay, matrices = [], [], []
+        seen = set()
+        for name, p in self.named_parameters():
+            if not p.requires_grad or id(p) in seen:
+                continue
+            seen.add(id(p))
+            is_embed = "token_embedding" in name or "lm_head" in name
+            if p.ndim < 2:
+                nodecay.append(p)  # RMSNorm gains, biases
+            elif is_embed:
+                decay.append(p)  # token embedding (tied with head)
+            elif use_muon:
+                matrices.append(p)  # attention/FFN weight matrices -> Muon
+            else:
+                decay.append(p)
+
+        adamw_kwargs = dict(betas=(train_config.beta1, train_config.beta2))
         if "fused" in inspect.signature(torch.optim.AdamW).parameters and torch.cuda.is_available():
-            kwargs["fused"] = True
-        return torch.optim.AdamW(self.parameters(), **kwargs)
+            adamw_kwargs["fused"] = True
+        adamw = torch.optim.AdamW(
+            [
+                {"params": decay, "weight_decay": train_config.weight_decay},
+                {"params": nodecay, "weight_decay": 0.0},
+            ],
+            lr=train_config.learning_rate,
+            **adamw_kwargs,
+        )
+        for g in adamw.param_groups:
+            g["initial_lr"] = train_config.learning_rate
+
+        if not use_muon:
+            return adamw
+
+        from model.muon import CombinedOptimizer, Muon
+
+        muon = Muon(matrices, lr=train_config.muon_lr, momentum=train_config.muon_momentum)
+        for g in muon.param_groups:
+            g["initial_lr"] = train_config.muon_lr
+        return CombinedOptimizer([adamw, muon])
 
     def num_parameters(self) -> int:
         return sum(p.numel() for p in self.parameters())
