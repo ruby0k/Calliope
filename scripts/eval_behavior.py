@@ -51,7 +51,6 @@ def fixed_prompt_section(model, tokenizer, device, args, sampling) -> dict:
             "mean_repetition_score": _mean([m["repetition_score"] for m in metrics]),
             "unfinished_rate": _mean([float(m["unfinished_sentence"]) for m in metrics]),
             "mean_sentence_length": _mean([m["average_sentence_length"] for m in metrics]),
-            "mean_name_consistency": _mean([m["character_name_consistency"] for m in metrics]),
         }
     return by_category
 
@@ -94,10 +93,9 @@ def render_markdown(report: dict) -> str:
         lines.append(f"| {k} | {v} |")
     lines += [
         "",
-        "## Opening diversity (unconditional)",
+        "## Unconditional generation diversity",
         "",
         f"- samples: **{u['n']}**",
-        f"- once-upon-a-time rate: **{u['once_upon_rate']}**  _(lower is better)_",
         f"- unique-opening ratio: **{u['unique_opening_ratio']}**  _(higher is better)_",
         f"- opening entropy (bits): **{u['opening_entropy']}**  _(higher is better)_",
         f"- mean repetition score: **{u['mean_repetition_score']}**  _(lower is better)_",
@@ -107,10 +105,10 @@ def render_markdown(report: dict) -> str:
     ]
     for prefix, count in u["top_openings"]:
         lines.append(f"- `{prefix}` × {count}")
-    lines += ["", "## Fixed-prompt behavior", "", "| category | rep | unfinished | sent.len | name-consist |", "|---|---|---|---|---|"]
+    lines += ["", "## Fixed-prompt behavior (by domain)", "", "| category | rep | unfinished | sent.len |", "|---|---|---|---|"]
     for cat, m in report["fixed_prompts"].items():
         lines.append(
-            f"| {cat} | {m['mean_repetition_score']} | {m['unfinished_rate']} | {m['mean_sentence_length']} | {m['mean_name_consistency']} |"
+            f"| {cat} | {m['mean_repetition_score']} | {m['unfinished_rate']} | {m['mean_sentence_length']} |"
         )
     lines += ["", "## Example unconditional openings", ""]
     for ex in u["examples"]:
@@ -162,7 +160,7 @@ def main() -> None:
     (out_dir / "behavior_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     (out_dir / "behavior_report.md").write_text(render_markdown(report), encoding="utf-8")
     print(f"wrote behavior_report.json + .md to {out_dir}")
-    print(json.dumps({"val_loss": report["val_loss"], "unconditional": {k: report["unconditional"][k] for k in ("once_upon_rate", "unique_opening_ratio", "opening_entropy", "mean_repetition_score")}}, indent=2))
+    print(json.dumps({"val_loss": report["val_loss"], "unconditional": {k: report["unconditional"][k] for k in ("unique_opening_ratio", "opening_entropy", "mean_repetition_score")}}, indent=2))
 
 
 if __name__ == "__main__":
