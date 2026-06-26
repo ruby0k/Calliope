@@ -1,0 +1,7 @@
+Current best model:
+
+checkpoints/calliope_100m/best.pt
+
+Run: Calliope-100M-run001
+Best validation loss: 1.5787
+Best iteration: 9000

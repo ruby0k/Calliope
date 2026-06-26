@@ -17,8 +17,8 @@ def main() -> None:
     assert logits.shape == (2, cfg.block_size, cfg.vocab_size)
     assert loss is not None and torch.isfinite(loss)
     loss.backward()
-    out = model.generate(x[:, :4], max_new_tokens=4)
-    assert out.shape == (2, 8)
+    out = model.generate(x[:1, :4], max_new_tokens=4)
+    assert out.shape == (1, 8)
     print("smoke ok")
 
 

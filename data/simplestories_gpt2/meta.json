@@ -1,0 +1,25 @@
+{
+  "tokenizer": "gpt2",
+  "sources": [
+    {
+      "key": "simplestories",
+      "path": "SimpleStories/SimpleStories",
+      "name": null,
+      "train_docs": 245501,
+      "train_tokens": 70287022,
+      "val_docs": 2479,
+      "val_tokens": 713136
+    }
+  ],
+  "streaming": true,
+  "fineweb_config": "sample-10BT",
+  "val_every": 100,
+  "shuffle_buffer": 1000,
+  "token_budgets": {
+    "calliope": 23700000,
+    "fineweb_edu": 23700000,
+    "simplestories": 71000000,
+    "wikitext": 71100000,
+    "tinystories": 237000000
+  }
+}

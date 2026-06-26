@@ -1,0 +1,28 @@
+{
+  "tokenizer": "bytelevel-bpe-32000",
+  "vocab_size": 32000,
+  "sources": [
+    {
+      "key": "fineweb_edu",
+      "train_tokens": 245000612,
+      "docs": 225850
+    },
+    {
+      "key": "code",
+      "train_tokens": 98000133,
+      "docs": 35501
+    },
+    {
+      "key": "simplestories",
+      "train_tokens": 59000324,
+      "docs": 206392
+    },
+    {
+      "key": "wikitext",
+      "train_tokens": 53277278,
+      "docs": 499257
+    }
+  ],
+  "total_tokens": 455278347,
+  "note": "INTERRUPTED build (wikitext stream hung ~21M short of its 74M cap); usable as-is"
+}

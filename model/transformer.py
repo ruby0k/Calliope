@@ -20,10 +20,10 @@ class RMSNorm(nn.Module):
         return self.weight * x
 
 
-def apply_rope(x: torch.Tensor) -> torch.Tensor:
+def apply_rope(x: torch.Tensor, theta: float) -> torch.Tensor:
     _, _, t, d = x.shape
     half = d // 2
-    freqs = 1.0 / (10000 ** (torch.arange(0, half, device=x.device).float() / half))
+    freqs = 1.0 / (theta ** (torch.arange(0, half, device=x.device).float() / half))
     angles = torch.outer(torch.arange(t, device=x.device).float(), freqs).to(x.dtype)
     cos = angles.cos()[None, None, :, :]
     sin = angles.sin()[None, None, :, :]
@@ -35,19 +35,28 @@ class CausalSelfAttention(nn.Module):
     def __init__(self, config: ModelConfig):
         super().__init__()
         assert config.n_embd % config.n_head == 0
+        n_kv_head = config.n_kv_head or config.n_head
+        assert config.n_head % n_kv_head == 0
         self.n_head = config.n_head
+        self.n_kv_head = n_kv_head
+        self.head_dim = config.n_embd // config.n_head
+        self.rope_theta = config.rope_theta
         self.dropout = config.dropout
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        self.c_attn = nn.Linear(config.n_embd, config.n_embd + 2 * n_kv_head * self.head_dim, bias=config.bias)
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         self.resid_dropout = nn.Dropout(config.dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         b, t, c = x.shape
-        q, k, v = self.c_attn(x).split(c, dim=2)
-        q = q.view(b, t, self.n_head, c // self.n_head).transpose(1, 2)
-        k = k.view(b, t, self.n_head, c // self.n_head).transpose(1, 2)
-        v = v.view(b, t, self.n_head, c // self.n_head).transpose(1, 2)
-        q, k = apply_rope(q), apply_rope(k)
+        q, k, v = self.c_attn(x).split((c, self.n_kv_head * self.head_dim, self.n_kv_head * self.head_dim), dim=2)
+        q = q.view(b, t, self.n_head, self.head_dim).transpose(1, 2)
+        k = k.view(b, t, self.n_kv_head, self.head_dim).transpose(1, 2)
+        v = v.view(b, t, self.n_kv_head, self.head_dim).transpose(1, 2)
+        q, k = apply_rope(q, self.rope_theta), apply_rope(k, self.rope_theta)
+        if self.n_kv_head != self.n_head:
+            repeat = self.n_head // self.n_kv_head
+            k = k.repeat_interleave(repeat, dim=1)
+            v = v.repeat_interleave(repeat, dim=1)
         y = F.scaled_dot_product_attention(
             q,
             k,
@@ -84,6 +93,38 @@ class Block(nn.Module):
         x = x + self.attn(self.rms_1(x))
         x = x + self.mlp(self.rms_2(x))
         return x
+
+
+def apply_repetition_penalty(logits: torch.Tensor, generated_ids: list[int], penalty: float) -> torch.Tensor:
+    if penalty == 1.0:
+        return logits
+    for token_id in set(generated_ids):
+        logits[token_id] = logits[token_id] / penalty if logits[token_id] > 0 else logits[token_id] * penalty
+    return logits
+
+
+def banned_ngram_tokens(generated: list[int], ngram_size: int) -> set[int]:
+    if ngram_size <= 0 or len(generated) < ngram_size - 1:
+        return set()
+    prefix = tuple(generated[-(ngram_size - 1) :])
+    banned = set()
+    for i in range(len(generated) - ngram_size + 1):
+        ngram = tuple(generated[i : i + ngram_size])
+        if ngram[:-1] == prefix:
+            banned.add(ngram[-1])
+    return banned
+
+
+def top_p_filter(logits: torch.Tensor, top_p: float | None) -> torch.Tensor:
+    if top_p is None or top_p >= 1.0:
+        return logits
+    sorted_logits, sorted_idx = torch.sort(logits, descending=True)
+    probs = F.softmax(sorted_logits, dim=-1)
+    remove = torch.cumsum(probs, dim=-1) > top_p
+    remove[..., 1:] = remove[..., :-1].clone()
+    remove[..., 0] = False
+    logits[sorted_idx[remove]] = -float("inf")
+    return logits
 
 
 class Transformer(nn.Module):
@@ -129,27 +170,75 @@ class Transformer(nn.Module):
         max_new_tokens: int,
         temperature: float = 0.8,
         top_k: int | None = 50,
+        top_p: float | None = 0.92,
+        repetition_penalty: float = 1.15,
+        no_repeat_ngram_size: int = 3,
+        eos_token_id: int | None = None,
     ) -> torch.Tensor:
+        generated_ids = idx[0].tolist()
         for _ in range(max_new_tokens):
             idx_cond = idx[:, -self.config.block_size :]
             logits, _ = self(idx_cond)
-            logits = logits[:, -1, :] / temperature
+            logits = logits[0, -1, :] / temperature
+            logits = apply_repetition_penalty(logits, generated_ids, repetition_penalty)
+            for token_id in banned_ngram_tokens(generated_ids, no_repeat_ngram_size):
+                logits[token_id] = -float("inf")
             if top_k is not None:
                 values, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < values[:, [-1]]] = -float("inf")
+                logits[logits < values[-1]] = -float("inf")
+            logits = top_p_filter(logits, top_p)
             probs = F.softmax(logits, dim=-1)
-            idx = torch.cat((idx, torch.multinomial(probs, num_samples=1)), dim=1)
+            next_id = torch.multinomial(probs, num_samples=1)
+            token = int(next_id)
+            generated_ids.append(token)
+            idx = torch.cat((idx, next_id.view(1, 1)), dim=1)
+            # Stop at end-of-document so we don't emit <|endoftext|> and run on into a new doc.
+            if eos_token_id is not None and token == eos_token_id:
+                break
         return idx
 
-    def configure_optimizer(self, train_config) -> torch.optim.Optimizer:
-        kwargs = dict(
-            lr=train_config.learning_rate,
-            betas=(train_config.beta1, train_config.beta2),
-            weight_decay=train_config.weight_decay,
-        )
+    def configure_optimizer(self, train_config):
+        # Split params: hidden weight matrices (Muon-eligible) vs embeddings (decay) vs 1D (no decay).
+        use_muon = getattr(train_config, "optimizer", "adamw") == "muon"
+        decay, nodecay, matrices = [], [], []
+        seen = set()
+        for name, p in self.named_parameters():
+            if not p.requires_grad or id(p) in seen:
+                continue
+            seen.add(id(p))
+            is_embed = "token_embedding" in name or "lm_head" in name
+            if p.ndim < 2:
+                nodecay.append(p)  # RMSNorm gains, biases
+            elif is_embed:
+                decay.append(p)  # token embedding (tied with head)
+            elif use_muon:
+                matrices.append(p)  # attention/FFN weight matrices -> Muon
+            else:
+                decay.append(p)
+
+        adamw_kwargs = dict(betas=(train_config.beta1, train_config.beta2))
         if "fused" in inspect.signature(torch.optim.AdamW).parameters and torch.cuda.is_available():
-            kwargs["fused"] = True
-        return torch.optim.AdamW(self.parameters(), **kwargs)
+            adamw_kwargs["fused"] = True
+        adamw = torch.optim.AdamW(
+            [
+                {"params": decay, "weight_decay": train_config.weight_decay},
+                {"params": nodecay, "weight_decay": 0.0},
+            ],
+            lr=train_config.learning_rate,
+            **adamw_kwargs,
+        )
+        for g in adamw.param_groups:
+            g["initial_lr"] = train_config.learning_rate
+
+        if not use_muon:
+            return adamw
+
+        from model.muon import CombinedOptimizer, Muon
+
+        muon = Muon(matrices, lr=train_config.muon_lr, momentum=train_config.muon_momentum)
+        for g in muon.param_groups:
+            g["initial_lr"] = train_config.muon_lr
+        return CombinedOptimizer([adamw, muon])
 
     def num_parameters(self) -> int:
         return sum(p.numel() for p in self.parameters())

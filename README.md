@@ -67,6 +67,8 @@ The goal is to become:
 
 ## Current Config
 
+Calliope-10M:
+
 ```python
 vocab_size = 50257
 block_size = 256
@@ -75,6 +77,32 @@ n_head = 4
 n_embd = 256
 dropout = 0.0
 bias = False
+```
+
+Calliope-30M:
+
+```python
+block_size = 512
+n_layer = 6
+n_head = 6
+n_embd = 384
+dropout = 0.1
+rope_theta = 50000
+batch_size = 2
+grad_accum_steps = 16
+```
+
+Calliope-100M:
+
+```python
+block_size = 512
+n_layer = 8
+n_head = 12
+n_embd = 768
+dropout = 0.1
+rope_theta = 50000
+batch_size = 8
+grad_accum_steps = 2
 ```
 
 ## Setup
@@ -110,6 +138,40 @@ This writes:
 uv run python -m train.train
 ```
 
+Train Calliope-30M:
+
+```powershell
+uv run python -m train.train --config configs.calliope_30m --run-name Calliope-30M-run001
+```
+
+Train Calliope-100M:
+
+```powershell
+uv run python -m train.train --config configs.calliope_100m --run-name Calliope-100M-run001
+```
+
+Prepare and train the HF streaming mix:
+
+```powershell
+uv run python scripts/prepare_hf_mix.py --out-dir data/hf_mix_gpt2
+uv run python -m train.train --config configs.calliope_100m_hf_mix --run-name Calliope-100M-hf-mix-run001
+```
+
+Experiment configs:
+
+```powershell
+uv run python -m train.train --config configs.calliope_30m_dropout01 --run-name Calliope-30M-dropout01-run001
+uv run python -m train.train --config configs.calliope_30m_ctx512 --run-name Calliope-30M-ctx512-run001
+uv run python -m train.train --config configs.calliope_30m_rope_theta50000 --run-name Calliope-30M-rope50000-run001
+```
+
+Smaller tokenizer experiment:
+
+```powershell
+uv run python scripts/prepare_tinystories_bpe.py --out-dir data/tinystories_bpe8192 --vocab-size 8192 --max-tokenizer-docs -1 --max-train-docs -1 --max-val-docs -1
+uv run python -m train.train --config configs.calliope_30m_tok8192 --run-name Calliope-30M-tok8192-run001
+```
+
 Useful smoke run:
 
 ```powershell
@@ -133,6 +195,18 @@ Generate 12 samples from the fixed prompt set:
 uv run python scripts/sample_fixed_prompts.py --samples-per-prompt 4
 ```
 
+The fixed prompt set is grouped by `story_start`, `continuation`, `dialogue`, `cause_effect`, and `ending`. Each sample row includes simple quality metrics: `repetition_score`, `eos_inside_output`, `unfinished_sentence`, `average_sentence_length`, `unique_token_ratio`, and `character_name_consistency`.
+
+Sampling defaults:
+
+```text
+temperature = 0.8
+top_k = 50
+top_p = 0.92
+repetition_penalty = 1.15
+no_repeat_ngram_size = 3
+```
+
 Check prepared train/val shard quality:
 
 ```powershell
@@ -143,6 +217,10 @@ uv run python scripts/check_split_quality.py
 
 ```powershell
 uv run python scripts/count_params.py
+```
+
+```powershell
+uv run python scripts/count_params.py --config configs.calliope_30m
 ```
 
 ## Check Model Wiring

@@ -8,7 +8,8 @@ import torch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from eval.fixed_prompts import PROMPTS
+from eval.fixed_prompts import PROMPT_CATEGORIES
+from eval.metrics import quality_metrics
 from model import ModelConfig, Transformer
 from train.checkpoint import load_checkpoint
 
@@ -20,6 +21,11 @@ def main() -> None:
     parser.add_argument("--max-new-tokens", type=int, default=120)
     parser.add_argument("--out", default="")
     parser.add_argument("--seed", type=int, default=1337)
+    parser.add_argument("--temperature", type=float, default=0.8)
+    parser.add_argument("--top-k", type=int, default=50)
+    parser.add_argument("--top-p", type=float, default=0.92)
+    parser.add_argument("--repetition-penalty", type=float, default=1.15)
+    parser.add_argument("--no-repeat-ngram-size", type=int, default=3)
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -37,14 +43,32 @@ def main() -> None:
 
     rows = []
     with out_path.open("w", encoding="utf-8") as f:
-        for prompt in PROMPTS:
-            ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
-            for i in range(args.samples_per_prompt):
-                torch.manual_seed(args.seed + len(rows))
-                out = model.generate(ids, args.max_new_tokens)[0].tolist()
-                row = {"prompt": prompt, "sample_index": i, "text": tokenizer.decode(out)}
-                rows.append(row)
-                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        for category, prompts in PROMPT_CATEGORIES.items():
+            for prompt in prompts:
+                ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
+                for i in range(args.samples_per_prompt):
+                    torch.manual_seed(args.seed + len(rows))
+                    out = model.generate(
+                        ids,
+                        args.max_new_tokens,
+                        temperature=args.temperature,
+                        top_k=args.top_k,
+                        top_p=args.top_p,
+                        repetition_penalty=args.repetition_penalty,
+                        no_repeat_ngram_size=args.no_repeat_ngram_size,
+                        eos_token_id=tokenizer.eos_token_id,
+                    )[0].tolist()
+                    generated_ids = out[ids.shape[1] :]
+                    text = tokenizer.decode(out, skip_special_tokens=True)
+                    row = {
+                        "category": category,
+                        "prompt": prompt,
+                        "sample_index": i,
+                        "text": text,
+                        **quality_metrics(prompt, text, generated_ids, tokenizer.eos_token_id),
+                    }
+                    rows.append(row)
+                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
     print(f"wrote {len(rows)} samples to {out_path}")
 
 

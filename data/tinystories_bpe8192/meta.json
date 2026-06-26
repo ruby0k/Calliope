@@ -1,0 +1,18 @@
+{
+  "tokenizer": "bytelevel-bpe-8192",
+  "dataset": "roneneldan/TinyStories",
+  "vocab_size": 8192,
+  "tokenizer_train_docs": 100000,
+  "train": {
+    "split": "train",
+    "docs": 2119719,
+    "tokens": 466631926,
+    "path": "data\\tinystories_bpe8192\\train.bin"
+  },
+  "val": {
+    "split": "validation",
+    "docs": 21990,
+    "tokens": 4689912,
+    "path": "data\\tinystories_bpe8192\\val.bin"
+  }
+}
