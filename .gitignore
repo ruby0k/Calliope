@@ -10,3 +10,4 @@ experiments/*/
 !experiments/.gitkeep
 uv.lock
 /docs
+/data/synthetic
