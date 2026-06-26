@@ -27,13 +27,14 @@ def _zeropower_via_newtonschulz5(G: torch.Tensor, steps: int = 5, eps: float = 1
 
 
 class Muon(torch.optim.Optimizer):
-    def __init__(self, params, lr: float = 0.02, momentum: float = 0.95, nesterov: bool = True, ns_steps: int = 5):
-        super().__init__(params, dict(lr=lr, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps))
+    def __init__(self, params, lr: float = 0.02, momentum: float = 0.95, nesterov: bool = True, ns_steps: int = 5, weight_decay: float = 0.0):
+        super().__init__(params, dict(lr=lr, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps, weight_decay=weight_decay))
 
     @torch.no_grad()
     def step(self):
         for group in self.param_groups:
             lr, momentum, nesterov, ns = group["lr"], group["momentum"], group["nesterov"], group["ns_steps"]
+            wd = group.get("weight_decay", 0.0)
             for p in group["params"]:
                 if p.grad is None:
                     continue
@@ -48,6 +49,10 @@ class Muon(torch.optim.Optimizer):
                 update = _zeropower_via_newtonschulz5(update, steps=ns)
                 # Scale so the update RMS is consistent across non-square matrices.
                 scale = max(1.0, p.size(0) / p.size(1)) ** 0.5
+                # Decoupled weight decay — REQUIRED for Muon: without it the matrices grow
+                # unbounded and the run diverges late (~iter 46k). Uses the group's scheduled lr.
+                if wd != 0:
+                    p.mul_(1 - lr * wd)
                 p.add_(update, alpha=-lr * scale)
 
 
@@ -74,3 +79,6 @@ class CombinedOptimizer:
     def load_state_dict(self, sd):
         for o, s in zip(self.optimizers, sd["optimizers"]):
             o.load_state_dict(s)
+        # Sub-optimizers rebuild their param_groups on load — re-sync the flat view
+        # so the LR scheduler (which sets group["lr"]) hits the live groups.
+        self.param_groups = [g for o in self.optimizers for g in o.param_groups]

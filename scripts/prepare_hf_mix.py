@@ -58,7 +58,7 @@ def write_ids(f, ids: list[int]) -> int:
     return len(ids)
 
 
-def hf_iter(path: str, name: str | None, split: str, max_docs: int | None, buffer: int, seed: int):
+def hf_iter(path: str, name: str | None, split: str, max_docs: int | None, buffer: int, seed: int, min_score: int = 0):
     if path == "ruby0k/calliope_data":
         from huggingface_hub import HfFileSystem
 
@@ -81,7 +81,31 @@ def hf_iter(path: str, name: str | None, split: str, max_docs: int | None, buffe
     ds = load_dataset(path, name, split=split, streaming=True)
     if buffer > 1:
         ds = ds.shuffle(buffer_size=buffer, seed=seed)
+    fineweb = path == "HuggingFaceFW/fineweb-edu"
     for i, row in enumerate(ds):
+        if max_docs is not None and i >= max_docs:
+            break
+        # FineWeb-Edu quality filter: keep only educational-score >= min_score (gated to fineweb).
+        if min_score and fineweb and int(row.get("int_score", round(row.get("score", 0)))) < min_score:
+            continue
+        text = row_text(row).strip()
+        if text:
+            yield text
+
+
+def local_jsonl_iter(path: str, buffer: int, seed: int, max_docs: int | None):
+    def rows():
+        with open(path, encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    yield json.loads(line)
+                except json.JSONDecodeError:
+                    pass
+
+    for i, row in enumerate(shuffle_iter(rows(), buffer, seed)):
         if max_docs is not None and i >= max_docs:
             break
         text = row_text(row).strip()
@@ -119,7 +143,7 @@ def build_tokenizer(args, out_dir: Path):
         for key, path, name, split in SOURCES:
             if docs_enabled[key] == 0:
                 continue
-            yield from hf_iter(path, name, split, args.max_tokenizer_docs, args.shuffle_buffer, args.seed)
+            yield from hf_iter(path, name, split, args.max_tokenizer_docs, args.shuffle_buffer, args.seed, args.fineweb_min_score)
 
     raw = Tokenizer(BPE(unk_token="<unk>"))
     raw.pre_tokenizer = ByteLevel(add_prefix_space=False)
@@ -146,6 +170,7 @@ def write_mix(train_f, val_files, tokenizer, args) -> list[dict]:
         "wikitext": limit_arg(args.max_wikitext_docs),
         "tinystories": limit_arg(args.max_tinystories_docs),
         "code": limit_arg(args.max_code_docs),
+        "synthetic": limit_arg(args.max_synthetic_docs),
     }
     token_limits = {
         "calliope": limit_arg(args.max_calliope_tokens),
@@ -154,6 +179,7 @@ def write_mix(train_f, val_files, tokenizer, args) -> list[dict]:
         "wikitext": limit_arg(args.max_wikitext_tokens),
         "tinystories": limit_arg(args.max_tinystories_tokens),
         "code": limit_arg(args.max_code_tokens),
+        "synthetic": limit_arg(args.max_synthetic_tokens),
     }
     streams = []
     for key, path, name, split in SOURCES:
@@ -163,7 +189,19 @@ def write_mix(train_f, val_files, tokenizer, args) -> list[dict]:
             "key": key,
             "path": path,
             "name": name,
-            "iter": hf_iter(path, name, split, limits[key], args.shuffle_buffer, args.seed),
+            "iter": hf_iter(path, name, split, limits[key], args.shuffle_buffer, args.seed, args.fineweb_min_score),
+            "train_docs": 0,
+            "train_tokens": 0,
+            "val_docs": 0,
+            "val_tokens": 0,
+        })
+    # Local synthetic/distilled jsonl (from scripts/generate_synthetic.py), mixed like any source.
+    if args.synthetic_path and limits["synthetic"] != 0:
+        streams.append({
+            "key": "synthetic",
+            "path": args.synthetic_path,
+            "name": None,
+            "iter": local_jsonl_iter(args.synthetic_path, args.shuffle_buffer, args.seed, limits["synthetic"]),
             "train_docs": 0,
             "train_tokens": 0,
             "val_docs": 0,
@@ -174,34 +212,54 @@ def write_mix(train_f, val_files, tokenizer, args) -> list[dict]:
     rng = random.Random(args.seed)
     doc_num = 0
     last_log = time.time()
-    while streams:
-        rng.shuffle(streams)
-        for stream in streams[:]:
-            try:
-                text = next(stream["iter"])
-            except StopIteration:
-                streams.remove(stream)
-                continue
-            ids = encode_ids(tokenizer, text)
-            total_tokens = stream["train_tokens"] + stream["val_tokens"]
-            if token_limits[stream["key"]] is not None and total_tokens >= token_limits[stream["key"]]:
-                streams.remove(stream)
-                continue
-            doc_num += 1
-            if doc_num % args.val_every == 0:
-                stream["val_tokens"] += write_ids(val_files[stream["key"]], ids)
-                stream["val_docs"] += 1
-            else:
-                stream["train_tokens"] += write_ids(train_f, ids)
-                stream["train_docs"] += 1
-            if doc_num % args.progress_every == 0 or time.time() - last_log >= args.progress_seconds:
-                total_tokens = sum(s["train_tokens"] + s["val_tokens"] for s in all_streams)
-                parts = [
-                    f"{s['key']} {s['train_docs'] + s['val_docs']} docs/{s['train_tokens'] + s['val_tokens']:,} tok"
-                    for s in all_streams
-                ]
-                print(f"progress {doc_num:,} docs/{total_tokens:,} tok | " + " | ".join(parts), flush=True)
-                last_log = time.time()
+
+    def over_budget(stream) -> bool:
+        lim = token_limits[stream["key"]]
+        return lim is not None and (stream["train_tokens"] + stream["val_tokens"]) >= lim
+
+    def record(stream, ids) -> None:
+        nonlocal doc_num, last_log
+        doc_num += 1
+        if doc_num % args.val_every == 0:
+            stream["val_tokens"] += write_ids(val_files[stream["key"]], ids)
+            stream["val_docs"] += 1
+        else:
+            stream["train_tokens"] += write_ids(train_f, ids)
+            stream["train_docs"] += 1
+        if doc_num % args.progress_every == 0 or time.time() - last_log >= args.progress_seconds:
+            total = sum(s["train_tokens"] + s["val_tokens"] for s in all_streams)
+            parts = [f"{s['key']} {s['train_docs'] + s['val_docs']} docs/{s['train_tokens'] + s['val_tokens']:,} tok" for s in all_streams]
+            print(f"progress {doc_num:,} docs/{total:,} tok | " + " | ".join(parts), flush=True)
+            last_log = time.time()
+
+    if args.curriculum_order:
+        # Curriculum: drain sources fully in the given easy->hard order so train.bin is ordered.
+        order = [k.strip() for k in args.curriculum_order.split(",") if k.strip()]
+        by_key = {s["key"]: s for s in streams}
+        ordered = [by_key[k] for k in order if k in by_key]
+        ordered += [s for s in streams if s["key"] not in set(order)]  # unlisted sources go last
+        print(f"curriculum order: {[s['key'] for s in ordered]}", flush=True)
+        for stream in ordered:
+            while not over_budget(stream):
+                try:
+                    text = next(stream["iter"])
+                except StopIteration:
+                    break
+                record(stream, encode_ids(tokenizer, text))
+    else:
+        # Default: round-robin interleave across sources (shuffled each pass).
+        while streams:
+            rng.shuffle(streams)
+            for stream in streams[:]:
+                try:
+                    text = next(stream["iter"])
+                except StopIteration:
+                    streams.remove(stream)
+                    continue
+                if over_budget(stream):
+                    streams.remove(stream)
+                    continue
+                record(stream, encode_ids(tokenizer, text))
 
     return [{k: v for k, v in stream.items() if k != "iter"} for stream in all_streams]
 
@@ -221,8 +279,13 @@ def main() -> None:
     parser.add_argument("--max-calliope-tokens", type=int, default=23_700_000)
     parser.add_argument("--max-code-docs", type=int, default=-1)
     parser.add_argument("--max-code-tokens", type=int, default=98_000_000)
+    parser.add_argument("--synthetic-path", default="")  # local jsonl from generate_synthetic.py; "" = off
+    parser.add_argument("--max-synthetic-docs", type=int, default=-1)
+    parser.add_argument("--max-synthetic-tokens", type=int, default=-1)
     parser.add_argument("--vocab-size", type=int, default=0)  # 0 = GPT-2 (50257); >0 = train byte-level BPE
     parser.add_argument("--max-tokenizer-docs", type=int, default=10000)  # per-source docs for BPE training
+    parser.add_argument("--fineweb-min-score", type=int, default=0)  # 0 = off; e.g. 4 keeps FineWeb-Edu int_score >= 4
+    parser.add_argument("--curriculum-order", default="")  # e.g. "simplestories,wikitext,synthetic,fineweb_edu,code" -> ordered train.bin
     parser.add_argument("--val-every", type=int, default=100)
     parser.add_argument("--shuffle-buffer", type=int, default=1000)
     parser.add_argument("--progress-every", type=int, default=1000)
@@ -240,6 +303,8 @@ def main() -> None:
     try:
         for key, *_ in SOURCES:
             val_files[key] = (out_dir / f"val_{key}.bin").open("wb")
+        if args.synthetic_path:
+            val_files["synthetic"] = (out_dir / "val_synthetic.bin").open("wb")
         with (out_dir / "train.bin").open("wb") as train_f:
             sources = write_mix(train_f, val_files, tokenizer, args)
     finally:
@@ -249,6 +314,8 @@ def main() -> None:
     meta = {
         "tokenizer": "gpt2" if args.vocab_size <= 0 else f"bytelevel-bpe-{args.vocab_size}",
         "vocab_size": len(tokenizer),
+        "fineweb_min_score": args.fineweb_min_score,
+        "curriculum_order": args.curriculum_order,
         "sources": sources,
         "streaming": True,
         "fineweb_config": "sample-10BT",
@@ -261,6 +328,7 @@ def main() -> None:
             "wikitext": args.max_wikitext_tokens,
             "tinystories": args.max_tinystories_tokens,
             "code": args.max_code_tokens,
+            "synthetic": args.max_synthetic_tokens,
         },
     }
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")

@@ -84,6 +84,7 @@ def main() -> None:
     parser.add_argument("--muon-lr", type=float, default=None)
     parser.add_argument("--warmup-iters", type=int, default=None)
     parser.add_argument("--out-dir", default="")
+    parser.add_argument("--data-dir", default="")
     parser.add_argument("--run-name", default="")
     args = parser.parse_args()
 
@@ -110,6 +111,8 @@ def main() -> None:
         train_cfg.warmup_iters = args.warmup_iters
     if args.out_dir:
         train_cfg.out_dir = args.out_dir
+    if args.data_dir:
+        train_cfg.data_dir = args.data_dir
     if args.run_name:
         train_cfg.run_name = args.run_name
 
@@ -138,7 +141,13 @@ def main() -> None:
     best_val_loss = float("inf")
     bad_evals = 0
     if args.resume:
+        # load_state_dict overwrites param-group hyperparams with the checkpoint's (possibly stale,
+        # e.g. missing weight_decay from an older optimizer). Snapshot the config-derived ones and
+        # re-apply after load so the current config wins; the optimizer STATE (momentum) is kept.
+        intended_groups = [{k: v for k, v in g.items() if k != "params"} for g in optimizer.param_groups]
         iter_num, best_val_loss, _ = load_checkpoint(args.resume, model, optimizer, device)
+        for g, snap in zip(optimizer.param_groups, intended_groups):
+            g.update(snap)
 
     meta = {
         "run_name": run_name,

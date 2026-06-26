@@ -235,7 +235,7 @@ class Transformer(nn.Module):
 
         from model.muon import CombinedOptimizer, Muon
 
-        muon = Muon(matrices, lr=train_config.muon_lr, momentum=train_config.muon_momentum)
+        muon = Muon(matrices, lr=train_config.muon_lr, momentum=train_config.muon_momentum, weight_decay=train_config.weight_decay)
         for g in muon.param_groups:
             g["initial_lr"] = train_config.muon_lr
         return CombinedOptimizer([adamw, muon])
